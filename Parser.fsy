@@ -1,0 +1,45 @@
+﻿%{
+open TexParsing
+%}
+
+%start start
+
+%token <string> WORD
+%token <string> COMMAND
+%token <string> MATH
+%token SPACE
+%token PARAGRAPH
+%token HASH
+%token LEFT_BRACE
+%token RIGHT_BRACE
+%token LEFT_BRACK
+%token RIGHT_BRACK
+%token EOF
+%type <TexBlock> start
+
+%%
+
+start: prog { $1 }
+
+prog:
+  | EOF { TexBlock.Empty }
+  | blocks { TexBlock.Items $1 }
+
+arg: LEFT_BRACE blocks RIGHT_BRACE { $2 }	
+args:
+	| arg { [$1] }
+	| args arg { $2::$1 }
+
+block:
+	| PARAGRAPH { TexBlock.Break }
+	| WORD { TexBlock.Text $1 }
+	| COMMAND args { TexBlock.CommandVariadic ($1, List.rev $2) }
+	| COMMAND { TexBlock.Command $1 }
+
+blocks:
+  | { [] }
+  | rev_blocks { List.rev $1 }
+
+rev_blocks:
+  | block { [$1] }
+  | rev_blocks block { $2 :: $1 }	

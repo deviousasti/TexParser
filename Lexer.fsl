@@ -1,0 +1,64 @@
+// https://en.wikibooks.org/wiki/LaTeX
+{
+
+open FSharp.Text.Lexing
+open System
+open Parser
+
+exception SyntaxError of string
+
+let lexeme = LexBuffer<_>.LexemeString
+
+let newline (lexbuf: LexBuffer<_>) = 
+    lexbuf.EndPos <- lexbuf.EndPos.NextLine
+
+let isSpecial c = match c with '{' | '}' | '#' | '$' | '%' | '^' | '&' | '_' | '~' -> true | _ -> false
+let lookAhead (lexbuf : LexBuffer<_>) = lexbuf.LexemeChar 1
+}
+
+
+let whitespc = [' ' '\t']+
+let newline     = "\n\r" | '\n' | '\r'  
+let char        = ['a'-'z' 'A'-'Z']   
+let digit       = ['0'-'9']   
+let identifier  = char(char|digit|['_' '.'])*
+let command     = '\\'identifier
+let para        = "\\\\" | "\par"
+let special     = ['#' '$' '%' '^' '&' '_' '{' '}' '~' '\\' ]
+let operator    = "=" | "<" | "<=" | ">" | ">=" | ":=" | "+" | "-" | "/" | "*" | "**" | "&" | "|" 
+
+rule tokenize =
+    parse
+    | whitespc { tokenize lexbuf }
+    | newline  { newline lexbuf; tokenize lexbuf }
+    | para     { PARAGRAPH }
+    | command  { COMMAND (lexeme lexbuf) } 
+    | '#'      { HASH }
+    | '{'      { LEFT_BRACE }
+    | '}'      { RIGHT_BRACE }
+    | '['      { LEFT_BRACK }
+    | ']'      { RIGHT_BRACK }
+    | '$'      { read_math "" lexbuf }
+    | eof      { EOF }
+    | '\\'     { read_word false "" lexbuf }
+    | _        { if isSpecial (lookAhead lexbuf) then 
+                    WORD (lexeme lexbuf)
+                 else
+                    read_word false (lexeme lexbuf) lexbuf
+                }
+and read_word escape str =
+    parse
+    | ' ' | eof  { WORD str }
+    | '\\' { read_word true str lexbuf  }
+    | _ { 
+            let word = str + (lexeme lexbuf) in
+            if isSpecial (lookAhead lexbuf) then
+                WORD word
+            else
+                read_word false word lexbuf 
+        }
+and read_math str =
+    parse
+    | '$' { MATH (str) }
+    | eof { raise (SyntaxError ("Math expr is not terminated"))  }
+    | _ { read_math (str + (lexeme lexbuf)) lexbuf }
